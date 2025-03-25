@@ -1,12 +1,16 @@
 const jwt = require("jsonwebtoken");
+const { isBlacklisted } = require("../utils/tokenBlacklist");
 
 const authenticateMiddleware = (req, res, next) => {
   try {
     const jwtSecretKey = process.env.JWT_SECRET_KEY;
-    const token = req.header("authorization").split(" ");
-    console.log("token",token)
-    const verified = jwt.verify(token[1], jwtSecretKey);
-        
+    const token = req.header("authorization")?.split(" ")[1];
+
+    if (!token || isBlacklisted(token)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const verified = jwt.verify(token, jwtSecretKey);
     if (verified) {
       next();
     } else {

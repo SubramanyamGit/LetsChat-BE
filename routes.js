@@ -3,6 +3,7 @@ const signIn = require("./routes/sign_in");
 const users = require("./routes/users");
 const chat = require("./routes/chat");
 const message = require("./routes/messages")
+const logout = require("./routes/logout")
 
 module.exports.initialize = (app) => {
     console.log("   Routes Initialized");
@@ -12,4 +13,5 @@ module.exports.initialize = (app) => {
     app.use("/users", users);
     app.use("/chat", chat);
     app.use("/messages", message);
+    app.use("/logout",logout)
 };

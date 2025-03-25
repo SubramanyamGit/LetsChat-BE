@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const { OAuth2Client } = require("google-auth-library");
+const { addToBlacklist } = require("../utils/tokenBlacklist");
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -37,26 +38,6 @@ async function uploadPublicKeyToGist(userId, publicKey) {
     }
 }
 
-// Signup User (Normal Email Signup)
-const signUpUser = async (req, res) => {
-    const { full_name, email, password, publicKey } = req.body;
-
-    try {
-        // Upload Public Key to GitHub Gist
-        const gistUrl = await uploadPublicKeyToGist(email, publicKey);
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await db.promise().query(
-            "INSERT INTO users (full_name, email, password_hash, oauth_provider, gist_url, public_key) VALUES (?, ?, ?, ?, ?, ?)",
-            [full_name, email, hashedPassword, "email", gistUrl, publicKey]
-        );
-
-        res.json({ message: "Signup successful!", gistUrl });
-    } catch (error) {
-        res.status(500).json({ error: error.message || "Email already registered" });
-    }
-};
-
 // Google Signup
 const googleSignup = async (req, res) => {
     const { token, email, full_name, publicKey } = req.body;
@@ -90,20 +71,6 @@ const googleSignup = async (req, res) => {
     }
 };
 
-
-// Normal Sign-in
-const signInUser = async (req, res) => {
-    const { email, password } = req.body;
-    const [users] = await db.promise().query("SELECT * FROM users WHERE email = ?", [email]);
-
-    if (!users.length || !(await bcrypt.compare(password, users[0].password_hash))) {
-        return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    const token = jwt.sign({ userId: users[0].id, email }, process.env.JWT_SECRET, { expiresIn: "24h" });
-    res.json({ token, gistUrl: users[0].gist_url, publicKey: users[0].public_key });
-};
-
 // Google Sign-in
 const googleSignInUser = async (req, res) => {
     const { token, email } = req.body;
@@ -119,12 +86,13 @@ const googleSignInUser = async (req, res) => {
         if (payload.email !== email) {
             return res.status(401).json({ error: "Invalid Google Credentials" });
         }
-
+        console.log("Errorrr",email)
         const [users] = await db.promise().query("SELECT * FROM users WHERE email = ?", [email]);
 
         if (!users.length) {
             return res.status(404).json({ error: "User not found. Please Sign Up first." });
         }
+       
 
         const authToken = jwt.sign({ userId: users[0].id, email }, process.env.JWT_SECRET_KEY, { expiresIn: "24h" });
 
@@ -134,4 +102,15 @@ const googleSignInUser = async (req, res) => {
     }
 };
 
-module.exports = { signUpUser, signInUser, googleSignup, googleSignInUser };
+
+const logoutUser = (req, res) => {
+    const token = req.header("authorization")?.split(" ")[1];
+    if (token) {
+        addToBlacklist(token);
+        return res.json({ message: "Logout successful" });
+    }
+    return res.status(400).json({ message: "Token missing" });
+};
+
+
+module.exports = { googleSignup, googleSignInUser,logoutUser };
